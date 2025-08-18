@@ -19,7 +19,13 @@ This is a simple coin toss game built with Flutter. It demonstrates a clean arch
 The project follows a feature-based folder structure:
 
 ```
+assets/
+ ├── idl/                 # Store IDL json
+ │
 lib/
+ ├── config/              # Store Program ID
+ │
+ │
  ├── core/                # Core functionalities shared across the app
  │    ├── theme/          # App theming (colors, text styles)
  │    └── storage/        # Local storage helper for SharedPreferences
