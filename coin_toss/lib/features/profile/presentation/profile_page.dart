@@ -27,103 +27,130 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   final _nameController = TextEditingController();
   bool _isLoading = false;
   Future<void> _createProfile() async {
-    if (_isLoading) {
+  if (_isLoading) return;
+
+  setState(() {
+    _isLoading = true;
+  });
+
+  try {
+    final name = _nameController.text;
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your name')),
+      );
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    final session = await LocalAssociationScenario.create();
+    session.startActivityForResult(null).ignore();
+    final mobileClient = await session.start();
 
-    try {
-      final name = _nameController.text;
-      if (name.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter your name')),
-        );
-        return;
-      }
+    await mobileClient.reauthorize(
+      identityUri: Uri.parse('cointoss://app'),
+      identityName: 'Coin Toss',
+      authToken: widget.authToken,
+    );
 
-      final session = await LocalAssociationScenario.create();
-      session.startActivityForResult(null).ignore();
-      final mobileClient = await session.start();
+    final programId = Ed25519HDPublicKey.fromBase58('DgQs1qXHvkbBKJwgVP9DcS4EzN48beF9AEw5UpiCBSS3');
+    final playerPublicKey = Ed25519HDPublicKey(widget.publicKey);
 
-      await mobileClient.reauthorize(
-        identityUri: Uri.parse('cointoss://app'),
-        identityName: 'Coin Toss',
-        authToken: widget.authToken,
-      );
+    final playerProfilePda = await Ed25519HDPublicKey.findProgramAddress(
+      seeds: [
+        'player_profile'.codeUnits,
+        playerPublicKey.bytes,
+      ],
+      programId: programId,
+    );
 
-      final programId = Ed25519HDPublicKey.fromBase58('DgQs1qXHvkbBKJwgVP9DcS4EzN48beF9AEw5UpiCBSS3');
-      final playerPublicKey = Ed25519HDPublicKey(widget.publicKey);
+    // Create the DTO and serialize it
+    final dto = CreatePlayerProfileDto(name: name);
+    
+    // Create the instruction
+    final instruction = await AnchorInstruction.forMethod(
+      programId: programId,
+      method: 'createPlayerProfile',
+      accounts: [
+        AccountMeta(pubKey: playerProfilePda, isSigner: false, isWriteable: true),
+        AccountMeta(pubKey: playerPublicKey, isSigner: true, isWriteable: true),
+        AccountMeta(pubKey: SystemProgram.id, isSigner: false, isWriteable: false),
+      ],
+      // Convert the DTO to Borsh bytes
+      arguments: ByteArray(Uint8List.fromList(dto.toBorsh())),
+      namespace: 'global',
+    );
 
-      final playerProfilePda = await Ed25519HDPublicKey.findProgramAddress(
-        seeds: [
-          'player_profile'.codeUnits,
-          playerPublicKey.bytes,
-        ],
-        programId: programId,
-      );
+    final client = SolanaClient(
+      rpcUrl: Uri.parse('https://api.devnet.solana.com'),
+      websocketUrl: Uri.parse('wss://api.devnet.solana.com'),
+    );
 
-      final instruction = [await AnchorInstruction.forMethod(
-        programId: programId,
-        method: 'createPlayerProfile',
-        accounts: [
-          AccountMeta(pubKey: playerProfilePda, isSigner: false, isWriteable: true),
-          AccountMeta(pubKey: playerPublicKey, isSigner: true, isWriteable: true),
-          AccountMeta(pubKey: SystemProgram.id, isSigner: false, isWriteable: false),
-        ],
-        arguments: ByteArray(CreatePlayerProfileDto(name: name).toBorsh()),
-        namespace: 'global',
-      )];
+    // Get latest blockhash
+    final latestBlockhash = await client.rpcClient.getLatestBlockhash();
+    
+    // Create and compile the message
+    final message = Message(instructions: [instruction]);
+    final compiledMessage = message.compile(
+      recentBlockhash: latestBlockhash.value.blockhash,
+      feePayer: playerPublicKey,
+    );
 
-      final client = SolanaClient(
-        rpcUrl: Uri.parse('https://api.devnet.solana.com'),
-        websocketUrl: Uri.parse('wss://api.devnet.solana.com'),
-      );
-      final latestBlockhash = await client.rpcClient.getLatestBlockhash();
-      
-      final message = Message(
-        instructions: instruction,
-      );
-      final transactions = message.compile(recentBlockhash: latestBlockhash.value.blockhash, feePayer: playerPublicKey);
-      final transaction = transactions.toByteArray().toList();
+    // Convert to bytes
+    final transaction = compiledMessage.toByteArray().toList();
 
-      final simulationResult = await client.rpcClient.simulateTransaction(
-        base64Encode(transaction),
-      );
-      if (simulationResult.value.err != null) {
-        print('Transaction simulation failed: ${simulationResult.value.err}');
-        print('Logs: ${simulationResult.value.logs}');
-        throw Exception('Transaction simulation failed. See logs for details.');
-      }
+    // Debug logs
+    print('Transaction data:');
+    print('PDA: ${playerProfilePda.toBase58()}');
+    print('Player: ${playerPublicKey.toBase58()}');
+    print('Instruction data length: ${instruction.data.length}');
+    print('First few bytes of instruction: ${instruction.data.take(10).toList()}');
 
-      final result = await mobileClient.signAndSendTransactions(transactions: [Uint8List.fromList(transaction)]);
+    // Simulate first
+    final simulationResult = await client.rpcClient.simulateTransaction(
+      base64Encode(transaction),
+      commitment: Commitment.confirmed,
+      signers: [playerPublicKey],
+    );
 
-      final signature = base58encode(result.signatures.first);
+    // Print simulation logs for debugging
+    print('Simulation logs:');
+    print(simulationResult.value.logs?.join('\n'));
 
-      await client.waitForSignatureStatus(
-        signature,
-        status: Commitment.confirmed,
-      );
-
-      await session.close();
-
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const CoinTossPage()),
-      );
-
-    } catch (e) {
-      print('Error creating profile: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error creating profile: $e')),
-      );
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
+    if (simulationResult.value.err != null) {
+      throw Exception('Simulation failed: ${simulationResult.value.err}\nLogs: ${simulationResult.value.logs?.join('\n')}');
     }
+
+    // Sign and send if simulation succeeds
+    final result = await mobileClient.signAndSendTransactions(
+      transactions: [Uint8List.fromList(transaction)],
+    );
+
+    final signature = base58encode(result.signatures.first);
+    print('Transaction sent with signature: $signature');
+
+    // Wait for confirmation
+    await client.waitForSignatureStatus(
+      signature,
+      status: Commitment.confirmed,
+    );
+
+    await session.close();
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const CoinTossPage()),
+    );
+
+  } catch (e) {
+    print('Detailed error: $e');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Error creating profile: $e')),
+    );
+  } finally {
+    setState(() {
+      _isLoading = false;
+    });
   }
+}
 
   @override
   Widget build(BuildContext context) {
