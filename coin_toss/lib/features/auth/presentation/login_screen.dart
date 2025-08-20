@@ -32,9 +32,8 @@ class _LoginScreenState extends State<LoginScreen> {
       final result = await client.authorize(
         identityUri: Uri.parse('cointoss://app'),
         identityName: 'Coin Toss',
-        cluster: 'http://10.0.2.2:8899',
+        cluster: 'devnet',
       );
-      await session.close();
 
       setState(() {
         authToken = result?.authToken;
@@ -45,7 +44,9 @@ class _LoginScreenState extends State<LoginScreen> {
         print(base58encode(publicKey!));
         print(authToken);
         _navigateToProfile(authToken!, publicKey!);
+        await session.close();
       }
+      
     } catch (e) {
       print('Error connecting to wallet: $e');
       ScaffoldMessenger.of(context).showSnackBar(
