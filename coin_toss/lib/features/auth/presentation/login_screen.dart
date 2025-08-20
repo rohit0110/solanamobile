@@ -1,7 +1,7 @@
 import 'dart:typed_data';
-
 import 'package:coin_toss/features/profile/presentation/profile_page.dart';
 import 'package:flutter/material.dart';
+import 'package:solana/base58.dart';
 import 'package:solana_mobile_client/solana_mobile_client.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -26,21 +26,14 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      print('Creating local association scenario...');
       final session = await LocalAssociationScenario.create();
-      print('Starting activity for result...');
       session.startActivityForResult(null).ignore();
-      print('Starting client...');
       final client = await session.start();
-      print('Authorizing...');
       final result = await client.authorize(
-        identityUri: Uri.parse('cointoss://app'), // TODO: Replace with your app URI
-        identityName: 'Coin Toss', // TODO: Replace with your app name
-        cluster: 'localnet',
+        identityUri: Uri.parse('cointoss://app'),
+        identityName: 'Coin Toss',
+        cluster: 'devnet',
       );
-      print('Closing session...');
-      await session.close();
-      print('Authorization result: $result');
 
       setState(() {
         authToken = result?.authToken;
@@ -48,8 +41,12 @@ class _LoginScreenState extends State<LoginScreen> {
       });
 
       if (authToken != null && publicKey != null) {
-        _navigateToProfile();
+        print(base58encode(publicKey!));
+        print(authToken);
+        _navigateToProfile(authToken!, publicKey!);
+        await session.close();
       }
+      
     } catch (e) {
       print('Error connecting to wallet: $e');
       ScaffoldMessenger.of(context).showSnackBar(
@@ -62,10 +59,15 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  void _navigateToProfile() {
+  void _navigateToProfile(String authToken, Uint8List publicKey) {
     Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (context) => ProfilePage()),
+      MaterialPageRoute(
+        builder: (context) => ProfilePage(
+          authToken: authToken,
+          publicKey: publicKey,
+        ),
+      ),
     );
   }
 

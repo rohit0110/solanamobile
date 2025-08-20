@@ -11,7 +11,7 @@ coin_toss_contract = "DgQs1qXHvkbBKJwgVP9DcS4EzN48beF9AEw5UpiCBSS3"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "Localnet"
+cluster = "devnet"
 wallet = "/Users/icarus/.config/solana/id.json"
 
 [scripts]
