@@ -1,3 +1,20 @@
-[] Add Core Program Logic for Coin toss Logic
+[x] Add Core Program Logic for Coin toss Logic
 [] Create Documentation and Blog of entire process for running the app
 [] List out entire summaries of the functions used from Flutter SDK
+[] Fix bug V/JsonRpc20Client( 4357): JSON-RPC 2.0 message received
+I/flutter ( 4357): Detailed error: jsonrpc-2.0 error (-32002): Transaction simulation failed: Error processing Instruction 0: custom program error: 0x0
+I/flutter ( 4357): 	{accounts: null, err: {InstructionError: [0, {Custom: 0}]}, innerInstructions: null, loadedAccountsDataSize: 179, logs: [Program DgQs1qXHvkbBKJwgVP9DcS4EzN48beF9AEw5UpiCBSS3 invoke [1], Program log: Instruction: CreatePlayerProfile, Program 11111111111111111111111111111111 invoke [2], Allocate: account Address { address: 8ZbNhNpNne97BBCyNWwPvCoFo7sypeRjiWctgBRW9XMq, base: None } already in use, Program 11111111111111111111111111111111 failed: custom program error: 0x0, Program DgQs1qXHvkbBKJwgVP9DcS4EzN48beF9AEw5UpiCBSS3 consumed 6981 of 200000 compute units, Program DgQs1qXHvkbBKJwgVP9DcS4EzN48beF9AEw5UpiCBSS3 failed: custom program error: 0x0], replacementBlockhash: null, returnData: null, unitsConsumed: 6981}
+E/flutter ( 4357): [ERROR:flutter/runtime/dart_vm_initializer.cc(40)] Unhandled Exception: setState() called after dispose(): _ProfilePageState#f32fa(lifecycle state: defunct, not mounted)
+E/flutter ( 4357): This error happens if you call setState() on a State object for a widget that no longer appears in the widget tree (e.g., whose parent widget no longer includes the widget in its build). This error can occur when code calls setState() from a timer or an animation callback.
+E/flutter ( 4357): The preferred solution is to cancel the timer or stop listening to the animation in the dispose() callback. Another solution is to check the "mounted" property of this object before calling setState() to ensure the object is still in the tree.
+E/flutter ( 4357): This error might indicate a memory leak if setState() is being called because another object is retaining a reference to this State object after it has been removed from the tree. To avoid memory leaks, consider breaking the reference to this object during dispose().
+E/flutter ( 4357): #0      State.setState.<anonymous closure> (package:flutter/src/widgets/framework.dart:1163:9)
+E/flutter ( 4357): #1      State.setState (package:flutter/src/widgets/framework.dart:1198:6)
+E/flutter ( 4357): #2      _ProfilePageState._createProfile (package:coin_toss/features/profile/presentation/profile_page.dart:153:5)
+E/flutter ( 4357): <asynchronous suspension>
+E/flutter ( 4357): 
+
+[] fix bug where doesnt redirect to next page on first attempt when connecting to MWA
+[] Check on reauthorize connection to mwa during coin_toss page incase it times out
+[] Fix flow where name is required even when PDA exists, directly go where needed
+[] Fix need for balance, replace with balance in the sense of Sol. GetBalance from SOlana

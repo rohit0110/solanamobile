@@ -64,6 +64,8 @@ class CoinTossScreenState {
   final bool isFlipping;
   final bool? tossResult; // true for heads
   final bool? selectedSideIsHeads; // true for heads
+  final double? balance;
+  final bool isLoadingBalance;
 
   CoinTossScreenState({
     this.player,
@@ -74,6 +76,8 @@ class CoinTossScreenState {
     this.isFlipping = false,
     this.tossResult,
     this.selectedSideIsHeads,
+    this.balance,
+    this.isLoadingBalance = false,
   });
 
   CoinTossScreenState copyWith({
@@ -86,6 +90,8 @@ class CoinTossScreenState {
     bool? tossResult,
     // use `ValueGetter` to allow passing null
     ValueGetter<bool?>? selectedSideIsHeads,
+    double? balance,
+    bool? isLoadingBalance,
   }) {
     return CoinTossScreenState(
       player: player ?? this.player,
@@ -98,6 +104,8 @@ class CoinTossScreenState {
       selectedSideIsHeads: selectedSideIsHeads != null
           ? selectedSideIsHeads()
           : this.selectedSideIsHeads,
+      balance: balance ?? this.balance,
+      isLoadingBalance: isLoadingBalance ?? this.isLoadingBalance,
     );
   }
 }
@@ -117,6 +125,7 @@ class CoinTossScreenNotifier extends StateNotifier<CoinTossScreenState> {
     if (player != null) {
       try {
         await _loadOnChainProfile();
+        await _fetchBalance();
       } catch (e) {
         state =
             state.copyWith(message: 'Error loading profile: ${e.toString()}');
@@ -155,6 +164,26 @@ class CoinTossScreenNotifier extends StateNotifier<CoinTossScreenState> {
         totalPlayed: playerProfile.totalPlayed,
         totalWon: playerProfile.totalWon,
       );
+    }
+  }
+
+  Future<void> _fetchBalance() async {
+    if (state.player == null) return;
+
+    state = state.copyWith(isLoadingBalance: true);
+    try {
+      final client = SolanaClient(
+        rpcUrl: Uri.parse('https://api.devnet.solana.com'),
+        websocketUrl: Uri.parse('wss://api.devnet.solana.com'),
+      );
+      final playerPublicKey = state.player!.publicKey;
+      final bal = await client.rpcClient.getBalance(playerPublicKey.toBase58());
+      state = state.copyWith(balance: bal.value / 1000000000);
+    } catch (e) {
+      print('Error fetching balance: $e');
+      state = state.copyWith(message: 'Error fetching balance: ${e.toString()}');
+    } finally {
+      state = state.copyWith(isLoadingBalance: false);
     }
   }
 
@@ -234,6 +263,7 @@ class CoinTossScreenNotifier extends StateNotifier<CoinTossScreenState> {
       await client.waitForSignatureStatus(sig, status: Commitment.confirmed);
 
       await _loadOnChainProfile();
+      await _fetchBalance();
 
       state = state.copyWith(
         isSaving: false,
@@ -300,6 +330,8 @@ class CoinTossPage extends ConsumerWidget {
     final player = screenState.player;
     final totalPlayed = screenState.totalPlayed;
     final totalWon = screenState.totalWon;
+    final balance = screenState.balance;
+    final isLoadingBalance = screenState.isLoadingBalance;
 
     final isHeadsSelected = screenState.selectedSideIsHeads == true;
     final isTailsSelected = screenState.selectedSideIsHeads == false;
@@ -316,7 +348,10 @@ class CoinTossPage extends ConsumerWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text('Balance: ${player?.balance ?? 0}'),
+                  if (isLoadingBalance)
+                    const CircularProgressIndicator()
+                  else if (balance != null)
+                    Text('Balance: ${balance.toStringAsFixed(4)} SOL'),
                   if (totalPlayed != null && totalWon != null)
                     Text('Played: $totalPlayed | Won: $totalWon',
                         style: Theme.of(context).textTheme.bodySmall),
