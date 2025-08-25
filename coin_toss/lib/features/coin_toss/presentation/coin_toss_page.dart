@@ -1,8 +1,8 @@
-
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:coin_toss/features/coin_toss/data/execute_toss_dto.dart';
+import 'package:coin_toss/features/coin_toss/domain/coin_toss_service.dart';
 import 'package:coin_toss/features/profile/data/profile_storage_service.dart';
 import 'package:coin_toss/features/profile/domain/player.dart';
 import 'package:flutter/material.dart';
@@ -60,16 +60,20 @@ class CoinTossScreenState {
   final String message;
   final BigInt? totalPlayed;
   final BigInt? totalWon;
+  final bool isSaving;
   final bool isFlipping;
   final bool? tossResult; // true for heads
+  final bool? selectedSideIsHeads; // true for heads
 
   CoinTossScreenState({
     this.player,
     this.message = '',
     this.totalPlayed,
     this.totalWon,
+    this.isSaving = false,
     this.isFlipping = false,
     this.tossResult,
+    this.selectedSideIsHeads,
   });
 
   CoinTossScreenState copyWith({
@@ -77,30 +81,37 @@ class CoinTossScreenState {
     String? message,
     BigInt? totalPlayed,
     BigInt? totalWon,
+    bool? isSaving,
     bool? isFlipping,
     bool? tossResult,
+    // use `ValueGetter` to allow passing null
+    ValueGetter<bool?>? selectedSideIsHeads,
   }) {
     return CoinTossScreenState(
       player: player ?? this.player,
       message: message ?? this.message,
       totalPlayed: totalPlayed ?? this.totalPlayed,
       totalWon: totalWon ?? this.totalWon,
+      isSaving: isSaving ?? this.isSaving,
       isFlipping: isFlipping ?? this.isFlipping,
       tossResult: tossResult ?? this.tossResult,
+      selectedSideIsHeads: selectedSideIsHeads != null
+          ? selectedSideIsHeads()
+          : this.selectedSideIsHeads,
     );
   }
 }
 
 class CoinTossScreenNotifier extends StateNotifier<CoinTossScreenState> {
   final ProfileStorageService _profileStorageService;
+  final CoinTossService _coinTossService;
 
-  CoinTossScreenNotifier(this._profileStorageService)
+  CoinTossScreenNotifier(this._profileStorageService, this._coinTossService)
       : super(CoinTossScreenState()) {
     _init();
   }
 
   void _init() async {
-    state = state.copyWith(isFlipping: true);
     final player = _profileStorageService.getPlayer();
     state = state.copyWith(player: player);
     if (player != null) {
@@ -111,7 +122,10 @@ class CoinTossScreenNotifier extends StateNotifier<CoinTossScreenState> {
             state.copyWith(message: 'Error loading profile: ${e.toString()}');
       }
     }
-    state = state.copyWith(isFlipping: false);
+  }
+
+  void selectSide(bool isHeads) {
+    state = state.copyWith(selectedSideIsHeads: () => isHeads, message: '');
   }
 
   Future<void> _loadOnChainProfile() async {
@@ -131,10 +145,9 @@ class CoinTossScreenNotifier extends StateNotifier<CoinTossScreenState> {
       programId: programId,
     );
 
-    final info =
-        await client.rpcClient.getAccountInfo(playerProfilePda.toBase58(), encoding: Encoding.base64);
-    print("VALUE IS");
-    print(info.value!.data!.toJson());
+    final info = await client.rpcClient
+        .getAccountInfo(playerProfilePda.toBase58(), encoding: Encoding.base64);
+
     if (info.value != null) {
       final accountData = base64Decode(info.value!.data!.toJson()[0]);
       final playerProfile = PlayerProfile.fromAccountData(accountData);
@@ -145,16 +158,20 @@ class CoinTossScreenNotifier extends StateNotifier<CoinTossScreenState> {
     }
   }
 
-  Future<void> makeToss({required bool isHeads}) async {
-    if (state.player == null || state.isFlipping) {
-      print("NULL PLAYER VALUE");
+  Future<void> makeToss() async {
+    if (state.player == null ||
+        state.isSaving ||
+        state.isFlipping ||
+        state.selectedSideIsHeads == null) {
       return;
     }
 
-    state = state.copyWith(isFlipping: true, message: 'Submitting...');
+    state = state.copyWith(isSaving: true, message: 'Submitting...');
 
     try {
-      final won = isHeads;
+      final tossResult = _coinTossService.toss();
+      final tossResultIsHeads = tossResult == CoinFace.heads;
+      final won = tossResultIsHeads == state.selectedSideIsHeads;
 
       final session = await LocalAssociationScenario.create();
       session.startActivityForResult(null).ignore();
@@ -175,10 +192,7 @@ class CoinTossScreenNotifier extends StateNotifier<CoinTossScreenState> {
           'DgQs1qXHvkbBKJwgVP9DcS4EzN48beF9AEw5UpiCBSS3');
 
       final playerProfilePda = await Ed25519HDPublicKey.findProgramAddress(
-        seeds: [
-          'profile'.codeUnits,
-          playerPublicKey.bytes,
-        ],
+        seeds: ['profile'.codeUnits, playerPublicKey.bytes],
         programId: programId,
       );
 
@@ -222,14 +236,25 @@ class CoinTossScreenNotifier extends StateNotifier<CoinTossScreenState> {
       await _loadOnChainProfile();
 
       state = state.copyWith(
-        isFlipping: false,
-        tossResult: isHeads,
-        message: 'Transaction successful!',
+        isSaving: false,
+        isFlipping: true,
+        tossResult: tossResultIsHeads,
+        message: '', // Clear submitting message
       );
 
       await session.close();
+
+      await Future.delayed(const Duration(seconds: 2));
+      
+      state = state.copyWith(
+        isFlipping: false,
+        message: won ? 'You Won!' : 'You Lost!',
+        selectedSideIsHeads: () => null, // Reset selection
+      );
+
     } catch (e) {
       state = state.copyWith(
+        isSaving: false,
         isFlipping: false,
         message: 'Error: ${e.toString()}',
       );
@@ -240,7 +265,8 @@ class CoinTossScreenNotifier extends StateNotifier<CoinTossScreenState> {
 final coinTossScreenProvider =
     StateNotifierProvider<CoinTossScreenNotifier, CoinTossScreenState>((ref) {
   final profileStorageService = ref.watch(profileStorageServiceProvider);
-  return CoinTossScreenNotifier(profileStorageService);
+  final coinTossService = ref.watch(coinTossServiceProvider);
+  return CoinTossScreenNotifier(profileStorageService, coinTossService);
 });
 
 class CoinTossPage extends ConsumerWidget {
@@ -270,9 +296,14 @@ class CoinTossPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final screenState = ref.watch(coinTossScreenProvider);
+    final notifier = ref.read(coinTossScreenProvider.notifier);
     final player = screenState.player;
     final totalPlayed = screenState.totalPlayed;
     final totalWon = screenState.totalWon;
+
+    final isHeadsSelected = screenState.selectedSideIsHeads == true;
+    final isTailsSelected = screenState.selectedSideIsHeads == false;
+    final isButtonDisabled = screenState.isFlipping || screenState.isSaving;
 
     return Scaffold(
       appBar: AppBar(
@@ -302,49 +333,58 @@ class CoinTossPage extends ConsumerWidget {
             if (screenState.isFlipping)
               const FlippingCoinAnimation()
             else
-              _buildFace(screenState.tossResult ?? true),
-            const SizedBox(height: 40),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 32, vertical: 16),
-                  ),
-                  onPressed: screenState.isFlipping
-                      ? null
-                      : () {
-                        print("COIN TOSSED");
-                          ref
-                              .read(coinTossScreenProvider.notifier)
-                              .makeToss(isHeads: true);
-                        },
-                  child: const Text('Heads'),
-                ),
-                const SizedBox(width: 20),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 32, vertical: 16),
-                  ),
-                  onPressed: screenState.isFlipping
-                      ? null
-                      : () {
-                          ref
-                              .read(coinTossScreenProvider.notifier)
-                              .makeToss(isHeads: false);
-                        },
-                  child: const Text('Tails'),
-                ),
-              ],
+              _buildFace(screenState.tossResult ?? screenState.selectedSideIsHeads ?? true),
+            const SizedBox(height: 20),
+            Text(
+              screenState.message,
+              style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 20),
-            if (screenState.message.isNotEmpty && !screenState.isFlipping)
-              Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Text(screenState.message),
-              ),
+            Column(
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isHeadsSelected ? Colors.blue.shade200 : null,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 32, vertical: 16),
+                      ),
+                      onPressed: isButtonDisabled ? null : () => notifier.selectSide(true),
+                      child: const Text('Heads'),
+                    ),
+                    const SizedBox(width: 20),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isTailsSelected ? Colors.blue.shade200 : null,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 32, vertical: 16),
+                      ),
+                      onPressed: isButtonDisabled ? null : () => notifier.selectSide(false),
+                      child: const Text('Tails'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 48, vertical: 20),
+                  ),
+                  onPressed: screenState.selectedSideIsHeads == null || isButtonDisabled
+                      ? null
+                      : () => notifier.makeToss(),
+                  child: screenState.isSaving
+                      ? const SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white),
+                        )
+                      : const Text('Toss!'),
+                ),
+              ],
+            )
           ],
         ),
       ),
