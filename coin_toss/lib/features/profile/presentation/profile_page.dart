@@ -2,9 +2,12 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:coin_toss/features/coin_toss/presentation/coin_toss_page.dart';
 import 'package:coin_toss/features/profile/data/create_player_profile_dto.dart';
+import 'package:coin_toss/features/profile/data/profile_storage_service.dart';
+import 'package:coin_toss/features/profile/domain/player.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:solana/base58.dart';
+import 'package:solana/dto.dart';
 import 'package:solana/solana.dart';
 import 'package:solana/src/encoder/encoder.dart';
 import 'package:solana/anchor.dart';
@@ -42,7 +45,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       );
       return;
     }
-
+    print("CHECKPOINT 1");
+    final profileStorageService = ref.read(profileStorageServiceProvider);
     final session = await LocalAssociationScenario.create();
     session.startActivityForResult(null).ignore();
     final mobileClient = await session.start();
@@ -52,6 +56,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       identityName: 'Coin Toss',
       authToken: widget.authToken,
     );
+    print("CHECKPOINT 2");
     final client = SolanaClient(
       rpcUrl: Uri.parse('https://api.devnet.solana.com'),
       websocketUrl: Uri.parse('wss://api.devnet.solana.com'),
@@ -62,13 +67,23 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
 
     final playerProfilePda = await Ed25519HDPublicKey.findProgramAddress(
       seeds: [
-        'player_profile'.codeUnits,
+        'profile'.codeUnits,
         playerPublicKey.bytes,
       ],
       programId: programId,
     ); 
-    final info = await client.rpcClient.getAccountInfo(playerProfilePda.toBase58());
+    print(playerProfilePda);
+    final info = await client.rpcClient.getAccountInfo(playerProfilePda.toBase58(), encoding: Encoding.base64 );
+    print("CHECKPOINT 3");
     if (info.value != null) {
+      print("INSIDE PRINT STATEMENT");
+        final newPlayer = Player(
+        name: name,
+        publicKey: playerPublicKey,
+        authToken: widget.authToken,
+        balance: 100, // Initial balance
+      );
+      profileStorageService.savePlayer(newPlayer);
       Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const CoinTossPage()),
     );
@@ -111,12 +126,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       transactions: [unsignedTxBytes],
     );
     final signedTx = signed.signedPayloads.first;
-    // final sim = await client.rpcClient.simulateTransaction(base64Encode(signedTx));
-    // print("HEREeeeeeeeeeeee");
-    // sim.value.logs?.forEach(print);
-    // if (sim.value.err != null) {
-    //   throw Exception('Preflight failed: ${sim.value.err}');
-    // }
     final sig = await client.rpcClient.sendTransaction(base64Encode(signedTx));
     print('tx sig: $sig');
     print('Transaction sent with signature: $sig');
@@ -127,6 +136,14 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       status: Commitment.confirmed,
     );
 
+    
+    final newPlayer = Player(
+      name: name,
+      publicKey: playerPublicKey,
+      authToken: widget.authToken,
+      balance: 100, // Initial balance
+    );
+    profileStorageService.savePlayer(newPlayer);
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (_) => const CoinTossPage()),
     );

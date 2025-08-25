@@ -41,8 +41,6 @@ class _LoginScreenState extends State<LoginScreen> {
       });
 
       if (authToken != null && publicKey != null) {
-        print(base58encode(publicKey!));
-        print(authToken);
         _navigateToProfile(authToken!, publicKey!);
         await session.close();
       }
