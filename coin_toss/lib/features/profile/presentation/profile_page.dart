@@ -6,7 +6,6 @@ import 'package:coin_toss/features/profile/data/profile_storage_service.dart';
 import 'package:coin_toss/features/profile/domain/player.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:solana/base58.dart';
 import 'package:solana/dto.dart';
 import 'package:solana/solana.dart';
 import 'package:solana/src/encoder/encoder.dart';
@@ -81,7 +80,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         name: name,
         publicKey: playerPublicKey,
         authToken: widget.authToken,
-        balance: 100, // Initial balance
       );
       profileStorageService.savePlayer(newPlayer);
       Navigator.of(context).pushReplacement(
@@ -141,7 +139,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       name: name,
       publicKey: playerPublicKey,
       authToken: widget.authToken,
-      balance: 100, // Initial balance
     );
     profileStorageService.savePlayer(newPlayer);
     Navigator.of(context).pushReplacement(

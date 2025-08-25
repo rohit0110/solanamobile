@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 import 'package:coin_toss/features/profile/presentation/profile_page.dart';
 import 'package:flutter/material.dart';
-import 'package:solana/base58.dart';
 import 'package:solana_mobile_client/solana_mobile_client.dart';
 
 class LoginScreen extends StatefulWidget {
