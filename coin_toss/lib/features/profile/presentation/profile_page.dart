@@ -76,15 +76,25 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     print("CHECKPOINT 3");
     if (info.value != null) {
       print("INSIDE PRINT STATEMENT");
-        final newPlayer = Player(
-        name: name,
-        publicKey: playerPublicKey,
+      final accountData = base64Decode(info.value!.data!.toJson()[0]);
+      final playerProfile = PlayerProfile.fromAccountData(accountData);
+
+      final existingPlayer = Player(
+        name: playerProfile.name,
+        publicKey: playerProfile.player,
         authToken: widget.authToken,
       );
-      profileStorageService.savePlayer(newPlayer);
+      profileStorageService.savePlayer(existingPlayer);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Profile already exists!')),
+      );
+
       Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const CoinTossPage()),
-    );
+        MaterialPageRoute(builder: (_) => const CoinTossPage()),
+      );
+      await session.close();
+      return;
     }
     final dto = CreatePlayerProfileDto(name: name);
     
