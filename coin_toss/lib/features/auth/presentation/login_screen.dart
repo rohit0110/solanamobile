@@ -24,8 +24,10 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
+    LocalAssociationScenario? session;
+
     try {
-      final session = await LocalAssociationScenario.create();
+      session = await LocalAssociationScenario.create();
       session.startActivityForResult(null).ignore();
       final client = await session.start();
       final result = await client.authorize(
@@ -41,7 +43,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (authToken != null && publicKey != null) {
         _navigateToProfile(authToken!, publicKey!);
-        await session.close();
       }
       
     } catch (e) {
@@ -53,6 +54,9 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() {
         _isLoading = false;
       });
+      if (session != null) {
+        await session.close();
+      }
     }
   }
 
