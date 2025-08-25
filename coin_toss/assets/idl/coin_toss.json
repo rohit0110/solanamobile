@@ -27,6 +27,27 @@
           "type": "string"
         }
       ]
+    },
+    {
+      "name": "executeToss",
+      "accounts": [
+        {
+          "name": "playerProfile",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "player",
+          "isMut": false,
+          "isSigner": true
+        }
+      ],
+      "args": [
+        {
+          "name": "won",
+          "type": "bool"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -40,11 +61,26 @@
             "type": "string"
           },
           {
-            "name": "owner",
+            "name": "player",
             "type": "publicKey"
+          },
+          {
+            "name": "totalPlayed",
+            "type": "u64"
+          },
+          {
+            "name": "totalWon",
+            "type": "u64"
           }
         ]
       }
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "UnauthorizedAccess",
+      "msg": "You are not authorized to perform this action."
     }
   ],
   "metadata": {

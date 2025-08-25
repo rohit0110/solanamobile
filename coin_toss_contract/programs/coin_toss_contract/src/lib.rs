@@ -10,6 +10,8 @@ pub mod coin_toss_contract {
         let player_profile = &mut ctx.accounts.player_profile;
         player_profile.name = name;
         player_profile.player = ctx.accounts.player.key();
+        player_profile.total_played = 0;
+        player_profile.total_won = 0;
         Ok(())
     }
 
